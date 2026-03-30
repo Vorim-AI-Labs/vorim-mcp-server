@@ -1,0 +1,19 @@
+startCommand:
+  type: stdio
+  configSchema:
+    type: object
+    required:
+      - vorimApiKey
+    properties:
+      vorimApiKey:
+        type: string
+        description: "Vorim AI API key (agid_sk_live_...)"
+  commandFunction:
+    |-
+    (config) => ({
+      command: 'node',
+      args: ['build/index.js'],
+      env: {
+        VORIM_API_KEY: config.vorimApiKey
+      }
+    })
