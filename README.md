@@ -1,5 +1,9 @@
 # Vorim AI — MCP Server
 
+[![npm version](https://img.shields.io/npm/v/@vorim/mcp-server.svg)](https://www.npmjs.com/package/@vorim/mcp-server)
+[![smithery badge](https://smithery.ai/badge/vorimai/vorim)](https://smithery.ai/servers/vorimai/vorim)
+[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 > Give every AI agent its own cryptographic identity, scoped permissions, and a tamper-evident audit trail — directly from Claude Desktop, Cursor, or any MCP-compatible client.
 
 ## What is Vorim AI?
