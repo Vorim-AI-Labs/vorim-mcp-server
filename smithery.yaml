@@ -2,18 +2,24 @@ startCommand:
   type: stdio
   configSchema:
     type: object
-    required:
-      - vorimApiKey
     properties:
-      vorimApiKey:
+      apiKey:
         type: string
-        description: "Vorim AI API key (agid_sk_live_...)"
-  commandFunction:
-    |-
+        title: Vorim API Key
+        description: "Your Vorim API key (agid_sk_live_...)"
+      baseUrl:
+        type: string
+        title: Base URL
+        description: "Vorim API base URL"
+        default: "https://api.vorim.ai"
+    required:
+      - apiKey
+  commandFunction: |
     (config) => ({
-      command: 'node',
-      args: ['build/index.js'],
+      command: 'npx',
+      args: ['-y', '@vorim/mcp-server'],
       env: {
-        VORIM_API_KEY: config.vorimApiKey
+        VORIM_API_KEY: config.apiKey,
+        VORIM_BASE_URL: config.baseUrl || 'https://api.vorim.ai'
       }
     })
