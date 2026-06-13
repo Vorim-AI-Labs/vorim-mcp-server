@@ -1,7 +1,7 @@
 {
   "name": "@vorim/mcp-server",
   "version": "1.1.9",
-  "mcpName": "io.github.Kzino/vorim-mcp-server",
+  "mcpName": "io.github.Vorim-AI-Labs/vorim-mcp-server",
   "description": "MCP server for Vorim AI — AI agent identity, permissions, and audit trails",
   "type": "module",
   "bin": {
@@ -27,7 +27,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Kzino/vorim-protocol"
+    "url": "https://github.com/Vorim-AI-Labs/vorim-protocol"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.28.0",

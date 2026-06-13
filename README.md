@@ -151,10 +151,10 @@ Once configured, use natural language in Claude, Cursor, or any MCP client:
 
 - **Platform:** [vorim.ai](https://vorim.ai)
 - **API Docs:** [vorim.ai/docs](https://vorim.ai/docs)
-- **Protocol Spec (VAIP):** [github.com/Kzino/vorim-protocol](https://github.com/Kzino/vorim-protocol)
+- **Protocol Spec (VAIP):** [github.com/Vorim-AI-Labs/vorim-protocol](https://github.com/Vorim-AI-Labs/vorim-protocol)
 - **TypeScript SDK:** [@vorim/sdk on npm](https://www.npmjs.com/package/@vorim/sdk)
 - **Python SDK:** [vorim on PyPI](https://pypi.org/project/vorim/)
-- **OpenClaw Skill:** [Kzino/vorim-openclaw-skill](https://github.com/Kzino/vorim-openclaw-skill)
+- **OpenClaw Skill:** [Vorim-AI-Labs/vorim-openclaw-skill](https://github.com/Vorim-AI-Labs/vorim-openclaw-skill)
 - **Agent Discovery:** [vorim.ai/.well-known/agent.json](https://vorim.ai/.well-known/agent.json)
 
 ## License
