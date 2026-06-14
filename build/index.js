@@ -60,7 +60,7 @@ if (!API_KEY) {
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-const MCP_VERSION_FALLBACK = "1.1.9";
+const MCP_VERSION_FALLBACK = "1.1.10";
 function readMcpVersion() {
     try {
         const here = dirname(fileURLToPath(import.meta.url));
