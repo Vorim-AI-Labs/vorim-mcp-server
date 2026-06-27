@@ -6,12 +6,12 @@
     "url": "https://github.com/Vorim-AI-Labs/vorim-mcp-server",
     "source": "github"
   },
-  "version": "1.1.10",
+  "version": "1.1.15",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@vorim/mcp-server",
-      "version": "1.1.10",
+      "version": "1.1.15",
       "transport": {
         "type": "stdio"
       },

@@ -12,7 +12,7 @@ Vorim AI is the identity and trust layer for autonomous AI agents. It gives each
 
 The protocol underneath (VAIP) is open, MIT-licensed, and submitted to IETF as `draft-nyantakyi-vaip-agent-identity-01`.
 
-This package is the **MCP (Model Context Protocol) server** that exposes 17 Vorim tools to any MCP-compatible AI client.
+This package is the **MCP (Model Context Protocol) server** that exposes 19 Vorim tools to any MCP-compatible AI client.
 
 Works with **Claude Desktop**, **Cursor**, **VS Code**, and any other MCP client.
 
@@ -76,7 +76,7 @@ Add to your VS Code MCP settings with the same format.
 2. Go to **Settings > API Keys**
 3. Create a key with `agents:*`, `audit:*`, `trust:*` scopes
 
-## Available Tools (17)
+## Available Tools (19)
 
 ### Health
 | Tool | Description |
@@ -118,6 +118,12 @@ Add to your VS Code MCP settings with the same format.
 | Tool | Description |
 |------|-------------|
 | `vorim_verify_trust` | Verify agent trust score (public, no auth required) |
+
+### Onboarding
+| Tool | Description |
+|------|-------------|
+| `vorim_onboard_start` | Start device-authorization onboarding for a user with no API key; returns a user code and activation URL |
+| `vorim_onboard_check` | Check whether the user approved onboarding and retrieve the issued API key |
 
 ## Example Usage
 

@@ -1,6 +1,6 @@
 {
   "name": "@vorim/mcp-server",
-  "version": "1.1.10",
+  "version": "1.1.15",
   "mcpName": "io.github.Vorim-AI-Labs/vorim-mcp-server",
   "description": "MCP server for Vorim AI — AI agent identity, permissions, and audit trails",
   "type": "module",
@@ -9,7 +9,9 @@
   },
   "scripts": {
     "build": "tsc && chmod 755 build/index.js",
-    "prepublishOnly": "npm run build",
+    "sync-tools": "node scripts/sync-tool-count.mjs --fix",
+    "sync-tools:check": "node scripts/sync-tool-count.mjs --check",
+    "prepublishOnly": "npm run sync-tools:check && npm run build",
     "dev": "tsx src/index.ts"
   },
   "files": [

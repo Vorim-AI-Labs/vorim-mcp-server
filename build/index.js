@@ -34,7 +34,33 @@ import { z } from "zod";
 //      machine should mint its own key so revocation surgically
 //      kills exactly one installation.
 const API_KEY = process.env.VORIM_API_KEY || "";
-const BASE_URL = (process.env.VORIM_BASE_URL || "https://api.vorim.ai").replace(/\/$/, "");
+// Validate the base URL before it is used to build authenticated requests.
+// Every call attaches `Authorization: Bearer <API_KEY>`, so a tampered
+// VORIM_BASE_URL (malicious Smithery config, poisoned shared MCP config,
+// compromised env) would otherwise exfiltrate the live key to an arbitrary
+// origin on the first tool call. Require https, except http on localhost for
+// local development. Reject (and exit) on anything else.
+function resolveBaseUrl() {
+    const raw = (process.env.VORIM_BASE_URL || "https://api.vorim.ai").replace(/\/$/, "");
+    let parsed;
+    try {
+        parsed = new URL(raw);
+    }
+    catch {
+        console.error(`[vorim-mcp] Invalid VORIM_BASE_URL: ${raw}`);
+        process.exit(1);
+    }
+    const isLocalhost = parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1" || parsed.hostname === "::1";
+    const ok = parsed.protocol === "https:" || (parsed.protocol === "http:" && isLocalhost);
+    if (!ok) {
+        console.error(`[vorim-mcp] Refusing to use VORIM_BASE_URL=${raw}: must be https:// ` +
+            `(http:// allowed only for localhost). The Vorim API key would otherwise ` +
+            `be sent to a non-Vorim origin.`);
+        process.exit(1);
+    }
+    return raw;
+}
+const BASE_URL = resolveBaseUrl();
 // The 7 canonical permission scopes (must match the API's VALID_SCOPES).
 const SCOPE_ENUM = z.enum([
     "agent:read", "agent:write", "agent:execute", "agent:transact",
@@ -60,7 +86,7 @@ if (!API_KEY) {
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-const MCP_VERSION_FALLBACK = "1.1.10";
+const MCP_VERSION_FALLBACK = "1.1.15";
 function readMcpVersion() {
     try {
         const here = dirname(fileURLToPath(import.meta.url));
@@ -98,6 +124,10 @@ async function vorimRequest(method, path, body) {
             "User-Agent": `vorim-mcp-server/${MCP_VERSION}`,
         },
         body: body ? JSON.stringify(body) : undefined,
+        // Don't follow a 3xx — a redirect would replay the API key to the
+        // redirect target. BASE_URL is already validated to the trusted Vorim
+        // origin, so this is defense-in-depth (matches siem.ts).
+        redirect: "error",
     });
     // Hand out clearer error messages for the common cases an MCP user
     // will see. Auth: the API key is wrong or revoked. Scope: the key
@@ -146,6 +176,8 @@ async function vorimGetEnvelope(path) {
             "Authorization": `Bearer ${API_KEY}`,
             "User-Agent": `vorim-mcp-server/${MCP_VERSION}`,
         },
+        // Don't replay the API key across a redirect (see vorimRequest).
+        redirect: "error",
     });
     if (!response.ok) {
         const j = await response.json().catch(() => ({}));
@@ -285,7 +317,16 @@ server.registerTool("vorim_grant_permission", {
     const body = { scope };
     if (valid_until)
         body.valid_until = valid_until;
-    if (rate_limit_max && rate_limit_window) {
+    // A rate limit needs BOTH fields. Surface a clear error when exactly one
+    // is supplied instead of silently dropping it (the old `&&` truthiness
+    // check also dropped a legitimate rate_limit_max of 0). Use !== undefined
+    // so 0 is preserved if the API ever accepts it.
+    const hasMax = rate_limit_max !== undefined;
+    const hasWindow = rate_limit_window !== undefined;
+    if (hasMax !== hasWindow) {
+        throw new Error("rate_limit_max and rate_limit_window must be provided together (got only one).");
+    }
+    if (hasMax && hasWindow) {
         body.rate_limit = { max: rate_limit_max, window: rate_limit_window };
     }
     const result = await vorimPost(`/agents/${encId(agent_id)}/permissions`, body);
@@ -333,7 +374,10 @@ server.registerTool("vorim_emit_event", {
         event.resource = resource;
     if (permission)
         event.permission = permission;
-    if (latency_ms)
+    // Presence check, not truthiness: a legitimate latency_ms of 0 (instant /
+    // cache-hit action) is falsy and would otherwise be dropped, even though
+    // the API persists `latency_ms ?? null` and would keep the 0.
+    if (latency_ms !== undefined)
         event.latency_ms = latency_ms;
     if (error_code)
         event.error_code = error_code;
@@ -386,7 +430,7 @@ server.registerTool("vorim_register_ephemeral", {
     },
 }, async ({ capabilities, scopes, ttl_seconds }) => {
     const body = { capabilities, scopes };
-    if (ttl_seconds)
+    if (ttl_seconds !== undefined)
         body.ttl_seconds = ttl_seconds;
     const result = await vorimPost("/agents/ephemeral", body);
     return text(result);
@@ -403,7 +447,7 @@ server.registerTool("vorim_delegate_credential", {
     },
 }, async ({ connection_id, agent_id, scopes_delegated, max_requests_per_hr, valid_until }) => {
     const body = { connection_id, agent_id, scopes_delegated };
-    if (max_requests_per_hr)
+    if (max_requests_per_hr !== undefined)
         body.max_requests_per_hr = max_requests_per_hr;
     if (valid_until)
         body.valid_until = valid_until;
@@ -436,6 +480,72 @@ server.registerTool("vorim_list_delegations", {
     const qs = params.toString();
     const result = await vorimGet(`/credentials/delegations${qs ? "?" + qs : ""}`);
     return text(result);
+});
+// ─── Onboarding (device authorization, RFC 8628) ────────────────────────────
+// These two tools let an agent onboard a brand-new user who has NO API key yet.
+// They are UNAUTHENTICATED (no VORIM_API_KEY needed) and never throw on the
+// flow's "pending"/"slow_down" 400s — they return the raw state so the agent
+// can drive the loop: vorim_onboard_start → show the human the code → poll with
+// vorim_onboard_check until approved.
+async function vorimPublicPost(path, body) {
+    const response = await fetch(`${BASE_URL}/v1${path}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "User-Agent": `vorim-mcp-server/${MCP_VERSION}` },
+        body: JSON.stringify(body ?? {}),
+        redirect: "error",
+    });
+    let json = {};
+    try {
+        json = (await response.json());
+    }
+    catch { /* non-JSON */ }
+    return { ok: response.ok, status: response.status, json };
+}
+server.registerTool("vorim_onboard_start", {
+    description: "Start onboarding a user who does NOT yet have a Vorim API key (device-authorization flow). " +
+        "Returns a user_code and an activation URL. You MUST show the human the user_code and verification_uri " +
+        "VERBATIM and ask them to approve in their browser. Then call vorim_onboard_check with the returned " +
+        "device_code to obtain the API key. No VORIM_API_KEY is required for this tool.",
+    inputSchema: {
+        client_name: z.string().max(120).optional().describe("Label shown to the human on the consent screen, e.g. your app or tool name"),
+    },
+}, async ({ client_name }) => {
+    const { ok, status, json } = await vorimPublicPost("/auth/device", { client_name });
+    if (!ok)
+        throw new Error(`Could not start onboarding (HTTP ${status})`);
+    const d = (json.data ?? {});
+    return text({
+        device_code: d.device_code,
+        user_code: d.user_code,
+        verification_uri: d.verification_uri,
+        verification_uri_complete: d.verification_uri_complete,
+        scopes: d.scopes,
+        expires_in: d.expires_in,
+        instructions: `Show the human this EXACTLY: "Approve this agent at ${d.verification_uri} and enter code ${d.user_code}". ` +
+            `Then call vorim_onboard_check with device_code="${d.device_code}" (wait ~5s between checks).`,
+    });
+});
+server.registerTool("vorim_onboard_check", {
+    description: "Check whether the human has approved the onboarding request from vorim_onboard_start. " +
+        "Pass the device_code you received. Returns the new API key once approved; otherwise returns a status " +
+        "(authorization_pending — wait ~5s and call again; slow_down — wait longer; access_denied; expired_token).",
+    inputSchema: {
+        device_code: z.string().min(1).describe("The device_code returned by vorim_onboard_start"),
+    },
+}, async ({ device_code }) => {
+    const { ok, json } = await vorimPublicPost("/auth/device/token", { device_code });
+    if (ok && json.data?.api_key) {
+        const d = json.data;
+        return text({
+            status: "approved",
+            api_key: d.api_key,
+            scopes: d.scopes,
+            org_id: d.org_id,
+            next: "Store this api_key as VORIM_API_KEY (shown only once). Then register a first agent identity with vorim_register_agent to finish setup.",
+        });
+    }
+    const code = json.error?.code || "authorization_pending";
+    return text({ status: code });
 });
 // ─── Start ────────────────────────────────────────────────────────────────
 async function main() {
